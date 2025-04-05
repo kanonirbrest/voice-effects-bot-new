@@ -42,8 +42,11 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
     query = update.inline_query.query
     
-    # Если это ответ на сообщение, сразу показываем эффекты
-    if update.inline_query.from_user.id == update.inline_query.chat.id:
+    # Проверяем, является ли чат личным
+    is_private = update.inline_query.chat_type == 'private'
+    
+    # Если это личный чат или ответ на сообщение, показываем эффекты
+    if is_private or update.inline_query.from_user.id == update.inline_query.chat.id:
         # Создаем результаты с эффектами
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -80,7 +83,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.inline_query.answer(results)
         return
     
-    # Если запрос не пустой и не ответ на сообщение
+    # Если запрос не пустой и не в личном чате
     await update.inline_query.answer([])
 
 async def process_voice(voice_file, effect_id):
@@ -186,6 +189,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.voice:
         return
     
+    # Проверяем, является ли чат личным
+    is_private = update.effective_chat.type == 'private'
+    
     # Создаем клавиатуру с эффектами
     keyboard = []
     for effect_id, effect_name in EFFECTS.items():
@@ -197,8 +203,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Отправляем сообщение с выбором эффекта
+    message_text = "Выберите эффект для голосового сообщения:"
+    if is_private:
+        message_text += "\n\nВы также можете использовать бота в других чатах, вызвав его через @имя_бота"
+    
     await update.message.reply_text(
-        "Выберите эффект для голосового сообщения:",
+        message_text,
         reply_markup=reply_markup
     )
 

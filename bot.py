@@ -226,47 +226,21 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
         )
 
-async def main():
-    """Запуск бота с обработкой ошибок"""
-    try:
-        logger.info("Initializing bot...")
-        # Создаем приложение
-        application = Application.builder().token(TOKEN).build()
-        
-        # Регистрация обработчиков
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(InlineQueryHandler(inline_query))
-        application.add_handler(CallbackQueryHandler(handle_callback))
-        
-        # Регистрация обработчика ошибок
-        application.add_error_handler(error_handler)
-        
-        # Запуск бота с обработкой конфликтов
-        logger.info("Starting bot...")
-        await application.initialize()
-        await application.start()
-        logger.info("Bot started successfully")
-        await application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,  # Игнорируем накопившиеся обновления
-            close_loop=False  # Не закрываем цикл событий
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in main: {e}", exc_info=True)
-        raise
-    finally:
-        # Корректное завершение работы
-        if application.running:
-            logger.info("Stopping bot...")
-            await application.stop()
-            await application.shutdown()
-            logger.info("Bot stopped successfully")
+def main():
+    """Запуск бота"""
+    # Создаем приложение
+    application = Application.builder().token(TOKEN).build()
+    
+    # Регистрация обработчиков
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(InlineQueryHandler(inline_query))
+    application.add_handler(CallbackQueryHandler(handle_callback))
+    
+    # Регистрация обработчика ошибок
+    application.add_error_handler(error_handler)
+    
+    # Запуск бота
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}") 
+    main() 

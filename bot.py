@@ -4,6 +4,7 @@ import tempfile
 import ffmpeg
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, InlineQueryHandler, CallbackQueryHandler, ContextTypes
+from flask import Flask, Response
 
 # Настройка логирования
 logging.basicConfig(
@@ -26,6 +27,13 @@ EFFECTS = {
     'reverse': 'Обратное воспроизведение',
     'autotune': 'Автотюн'
 }
+
+# Создаем Flask приложение для healthcheck
+app = Flask(__name__)
+
+@app.route('/health')
+def health_check():
+    return Response("OK", status=200)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -199,6 +207,10 @@ def main():
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_error_handler(error_handler)
+    
+    # Запускаем Flask в отдельном потоке
+    from threading import Thread
+    Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3000)))).start()
     
     # Запускаем бота
     application.run_polling(allowed_updates=Update.ALL_TYPES)

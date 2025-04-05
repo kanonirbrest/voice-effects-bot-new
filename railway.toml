@@ -1,6 +1,7 @@
 [build]
 builder = "nixpacks"
 buildCommand = "pip install -r requirements.txt"
+buildpacks = ["https://github.com/heroku/heroku-buildpack-ffmpeg.git"]
 
 [deploy]
 startCommand = "python bot.py"

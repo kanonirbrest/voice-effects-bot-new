@@ -234,8 +234,15 @@ def main():
     logger.info("3. Время запуска: %s", datetime.now().isoformat())
     logger.info("===================")
     
-    # Создаем приложение
-    application = Application.builder().token(TOKEN).build()
+    # Создаем приложение с увеличенным таймаутом
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .read_timeout(30)
+        .write_timeout(30)
+        .connect_timeout(30)
+        .build()
+    )
     
     # Регистрируем обработчики
     application.add_handler(CommandHandler("start", start))
@@ -247,8 +254,22 @@ def main():
     from threading import Thread
     Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3000)))).start()
     
-    # Запускаем бота
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Запускаем бота с обработкой ошибок
+    while True:
+        try:
+            application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,
+                close_loop=False
+            )
+        except Exception as e:
+            logger.error(f"Error in polling: {str(e)}")
+            if "Timed out" in str(e) or "Conflict" in str(e):
+                logger.info("Connection error detected, waiting 10 seconds before retry...")
+                import time
+                time.sleep(10)
+            else:
+                raise e
 
 if __name__ == '__main__':
     main() 

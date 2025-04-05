@@ -4,7 +4,6 @@ import tempfile
 import ffmpeg
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, InlineQueryHandler
-from dotenv import load_dotenv
 
 # Настройка логирования
 logging.basicConfig(
@@ -13,10 +12,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Загрузка переменных окружения
-load_dotenv()
-TOKEN = os.getenv('TELEGRAM_TOKEN')
-logger.info(f"Loaded token: {TOKEN[:10]}...")  # Логируем первые 10 символов токена
+# Получение токена из переменных окружения
+TOKEN = os.environ.get('TELEGRAM_TOKEN')
+if not TOKEN:
+    logger.error("TELEGRAM_TOKEN not found in environment variables")
+    raise ValueError("TELEGRAM_TOKEN not found in environment variables")
+
+logger.info("Token loaded successfully")
 
 # Эффекты для голосовых сообщений
 EFFECTS = {
@@ -40,24 +42,8 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
     query = update.inline_query.query
     
-    # Если запрос пустой, показываем инструкцию
-    if not query:
-        results = [
-            InlineQueryResultArticle(
-                id='help',
-                title='Как использовать бота',
-                input_message_content=InputTextMessageContent(
-                    "1. Ответьте на голосовое сообщение, вызвав меня через @имя_бота\n"
-                    "2. Выберите эффект из списка"
-                )
-            )
-        ]
-        await update.inline_query.answer(results)
-        return
-    
-    # Проверяем, является ли запрос реплаем на сообщение
-    if query.startswith('reply_'):
-        message_id = query.replace('reply_', '')
+    # Если это ответ на сообщение, сразу показываем эффекты
+    if update.inline_query.from_user.id == update.inline_query.chat.id:
         # Создаем результаты с эффектами
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -71,15 +57,31 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton(
                             "Обработать",
-                            callback_data=f"{message_id}:{effect_id}"
+                            callback_data=f"{update.inline_query.message_id}:{effect_id}"
                         )
                     ]])
                 )
             )
         await update.inline_query.answer(results)
-    else:
-        # Если запрос не является реплаем
-        await update.inline_query.answer([])
+        return
+    
+    # Если запрос пустой, показываем инструкцию
+    if not query:
+        results = [
+            InlineQueryResultArticle(
+                id='help',
+                title='Как использовать бота',
+                input_message_content=InputTextMessageContent(
+                    "1. Ответьте на голосовое сообщение\n"
+                    "2. Выберите эффект из списка"
+                )
+            )
+        ]
+        await update.inline_query.answer(results)
+        return
+    
+    # Если запрос не пустой и не ответ на сообщение
+    await update.inline_query.answer([])
 
 async def process_voice(voice_file, effect_id):
     """Обработка голосового сообщения с выбранным эффектом"""
@@ -179,6 +181,27 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error processing voice message: {e}")
         await query.message.reply_text("Произошла ошибка при обработке голосового сообщения")
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик голосовых сообщений"""
+    if not update.message.voice:
+        return
+    
+    # Создаем клавиатуру с эффектами
+    keyboard = []
+    for effect_id, effect_name in EFFECTS.items():
+        keyboard.append([InlineKeyboardButton(
+            effect_name,
+            callback_data=f"{update.message.message_id}:{effect_id}"
+        )])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Отправляем сообщение с выбором эффекта
+    await update.message.reply_text(
+        "Выберите эффект для голосового сообщения:",
+        reply_markup=reply_markup
+    )
+
 def main():
     """Запуск бота"""
     application = Application.builder().token(TOKEN).build()
@@ -187,6 +210,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CallbackQueryHandler(handle_callback))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))  # Добавляем обработчик голосовых сообщений
 
     # Запуск бота
     application.run_polling()

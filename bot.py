@@ -232,6 +232,7 @@ def main():
     logger.info("1. Проверка токена: %s", "OK" if TOKEN else "FAIL")
     logger.info("2. Проверка эффектов: %s", list(EFFECTS.keys()))
     logger.info("3. Время запуска: %s", datetime.now().isoformat())
+    logger.info("4. Новая версия бота: 1.0.1")
     logger.info("===================")
     
     # Создаем приложение с увеличенным таймаутом

@@ -40,16 +40,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
-    query = update.inline_query.query
-    
-    # Проверяем, является ли чат личным
-    is_private = update.inline_query.chat_type == 'private'
-    
     # Проверяем, есть ли сообщение, на которое отвечают
-    has_reply = bool(update.inline_query.message_id)
-    
-    # Если это личный чат или ответ на сообщение, показываем эффекты
-    if is_private or has_reply:
+    if not update.inline_query.message_id:
+        # Если нет ответа на сообщение, показываем инструкцию
+        results = [
+            InlineQueryResultArticle(
+                id='help',
+                title='Как использовать бота',
+                input_message_content=InputTextMessageContent(
+                    "1. Ответьте на голосовое сообщение\n"
+                    "2. Вызовите бота через @имя_бота\n"
+                    "3. Выберите эффект из списка"
+                )
+            )
+        ]
+        await update.inline_query.answer(results)
+        return
+
+    try:
+        # Получаем сообщение, на которое отвечают
+        message = await context.bot.get_message(
+            chat_id=update.inline_query.chat_id,
+            message_id=update.inline_query.message_id
+        )
+        
+        # Проверяем, является ли сообщение голосовым
+        if not message.voice:
+            results = [
+                InlineQueryResultArticle(
+                    id='error',
+                    title='Ошибка',
+                    input_message_content=InputTextMessageContent(
+                        "Пожалуйста, ответьте на голосовое сообщение"
+                    )
+                )
+            ]
+            await update.inline_query.answer(results)
+            return
+        
         # Создаем результаты с эффектами
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -63,32 +91,25 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton(
                             "Обработать",
-                            callback_data=f"{update.inline_query.message_id}:{effect_id}"
+                            callback_data=f"{message.message_id}:{effect_id}"
                         )
                     ]])
                 )
             )
         await update.inline_query.answer(results)
-        return
-    
-    # Если запрос пустой, показываем инструкцию
-    if not query:
+        
+    except Exception as e:
+        logger.error(f"Error in inline query: {e}")
         results = [
             InlineQueryResultArticle(
-                id='help',
-                title='Как использовать бота',
+                id='error',
+                title='Ошибка',
                 input_message_content=InputTextMessageContent(
-                    "1. Ответьте на голосовое сообщение\n"
-                    "2. Выберите эффект из списка\n\n"
-                    "В личных сообщениях вы можете просто отправить голосовое сообщение боту"
+                    "Произошла ошибка. Пожалуйста, попробуйте еще раз."
                 )
             )
         ]
         await update.inline_query.answer(results)
-        return
-    
-    # Если запрос не пустой и не в личном чате
-    await update.inline_query.answer([])
 
 async def process_voice(voice_file, effect_id):
     """Обработка голосового сообщения с выбранным эффектом"""
@@ -147,8 +168,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Разбираем callback_data
     message_id, effect_id = query.data.split(':')
     
-    # Получаем сообщение по ID
     try:
+        # Получаем сообщение по ID
         message = await context.bot.get_message(
             chat_id=update.effective_chat.id,
             message_id=int(message_id)
@@ -188,34 +209,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error processing voice message: {e}")
         await query.message.reply_text("Произошла ошибка при обработке голосового сообщения")
 
-async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик голосовых сообщений"""
-    if not update.message.voice:
-        return
-    
-    # Проверяем, является ли чат личным
-    is_private = update.effective_chat.type == 'private'
-    
-    # Создаем клавиатуру с эффектами
-    keyboard = []
-    for effect_id, effect_name in EFFECTS.items():
-        keyboard.append([InlineKeyboardButton(
-            effect_name,
-            callback_data=f"{update.message.message_id}:{effect_id}"
-        )])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Отправляем сообщение с выбором эффекта
-    message_text = "Выберите эффект для голосового сообщения:"
-    if is_private:
-        message_text += "\n\nВы также можете использовать бота в других чатах, вызвав его через @имя_бота"
-    
-    await update.message.reply_text(
-        message_text,
-        reply_markup=reply_markup
-    )
-
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
     logger.error(f"Update {update} caused error {context.error}")
@@ -233,7 +226,6 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CallbackQueryHandler(handle_callback))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     
     # Регистрация обработчика ошибок
     application.add_error_handler(error_handler)

@@ -5,6 +5,7 @@ import ffmpeg
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, InlineQueryHandler
 import telegram
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -30,6 +31,80 @@ EFFECTS = {
     'reverse': 'Обратное воспроизведение',
     'autotune': 'Автотюн'
 }
+
+class BotApplication:
+    def __init__(self):
+        self.application = None
+        self.logger = logging.getLogger(__name__)
+
+    async def initialize(self):
+        """Инициализация бота"""
+        self.logger.info("Starting bot initialization...")
+        self.application = Application.builder().token(TOKEN).build()
+        self.logger.info("Application created successfully")
+
+        # Регистрация обработчиков
+        self.application.add_handler(CommandHandler("start", start))
+        self.application.add_handler(InlineQueryHandler(inline_query))
+        self.application.add_handler(CallbackQueryHandler(handle_callback))
+        self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+        self.logger.info("Handlers registered successfully")
+
+        # Регистрация обработчика ошибок
+        self.application.add_error_handler(self.error_handler)
+        self.logger.info("Error handler registered")
+
+    async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик ошибок"""
+        self.logger.error(f"Update {update} caused error {context.error}")
+        
+        if isinstance(context.error, telegram.error.Conflict):
+            self.logger.warning("Bot instance conflict detected. Attempting to resolve...")
+            try:
+                # Останавливаем текущий экземпляр
+                await self.application.stop()
+                self.logger.info("Current instance stopped")
+                
+                # Ждем немного перед перезапуском
+                await asyncio.sleep(5)
+                
+                # Перезапускаем бота
+                self.logger.info("Restarting bot...")
+                await self.application.initialize()
+                await self.application.start()
+                await self.application.run_polling(
+                    allowed_updates=Update.ALL_TYPES,
+                    drop_pending_updates=True
+                )
+                self.logger.info("Bot restarted successfully")
+            except Exception as e:
+                self.logger.error(f"Error during bot restart: {e}")
+                raise
+        else:
+            if update and update.effective_message:
+                await update.effective_message.reply_text(
+                    "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
+                )
+
+    async def start(self):
+        """Запуск бота"""
+        try:
+            # Принудительная очистка всех обновлений
+            self.logger.info("Clearing updates queue...")
+            await self.application.bot.delete_webhook(drop_pending_updates=True)
+            updates = await self.application.bot.get_updates(offset=-1)
+            if updates:
+                self.logger.info(f"Cleared {len(updates)} pending updates")
+            
+            # Запускаем бота
+            self.logger.info("Starting bot polling...")
+            await self.application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+        except Exception as e:
+            self.logger.error(f"Error during bot initialization: {e}")
+            raise
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -203,42 +278,17 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-def main():
-    """Запуск бота"""
-    application = Application.builder().token(TOKEN).build()
-
-    # Регистрация обработчиков
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(InlineQueryHandler(inline_query))
-    application.add_handler(CallbackQueryHandler(handle_callback))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-
-    # Запуск бота с очисткой очереди обновлений
-    application.bot.delete_webhook()
-    application.bot.get_updates(offset=-1)
-    
-    # Добавляем обработчик ошибок
-    application.add_error_handler(error_handler)
-    
-    # Запускаем бота с обработкой всех типов обновлений
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ошибок"""
-    logger.error(f"Update {update} caused error {context.error}")
-    
-    if isinstance(context.error, telegram.error.Conflict):
-        logger.warning("Bot instance conflict detected. Restarting...")
-        # Перезапускаем бота
-        await application.stop()
-        await application.initialize()
-        await application.start()
-        await application.run_polling(allowed_updates=Update.ALL_TYPES)
-    else:
-        if update and update.effective_message:
-            await update.effective_message.reply_text(
-                "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
-            )
+async def main():
+    """Основная функция запуска"""
+    bot = BotApplication()
+    await bot.initialize()
+    await bot.start()
 
 if __name__ == '__main__':
-    main() 
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        raise 

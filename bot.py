@@ -69,6 +69,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Проверяем, есть ли сообщение, на которое отвечаем
         if not update.inline_query.reply_to_message:
+            add_log("No reply message found")
             await update.inline_query.answer([
                 InlineQueryResultArticle(
                     id='help',
@@ -84,6 +85,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Проверяем, является ли сообщение голосовым
         if not update.inline_query.reply_to_message.voice:
+            add_log("Reply message is not a voice message")
             await update.inline_query.answer([
                 InlineQueryResultArticle(
                     id='error',
@@ -95,6 +97,8 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
             return
 
+        add_log(f"Processing voice message with ID: {update.inline_query.reply_to_message.message_id}")
+        
         # Создаем список эффектов
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -114,6 +118,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             )
         await update.inline_query.answer(results)
+        add_log(f"Successfully sent {len(results)} effects to user")
 
     except Exception as e:
         add_log(f"Error in inline query: {str(e)}")

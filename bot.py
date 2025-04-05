@@ -7,6 +7,10 @@ from telegram.ext import Application, CommandHandler, InlineQueryHandler, Callba
 from flask import Flask, Response, request
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
 
 # Настройка логирования
 logging.basicConfig(

@@ -1,0 +1,7 @@
+{
+    "python_version": "3.11",
+    "source_directory": "/home/kanonirbrest/voice-effects-bot",
+    "virtualenv_path": "/home/kanonirbrest/.virtualenvs/voice-effects-bot",
+    "wsgi_file": "/home/kanonirbrest/voice-effects-bot/wsgi.py",
+    "requirements_file": "/home/kanonirbrest/voice-effects-bot/requirements.txt"
+} 

@@ -3,7 +3,7 @@ import logging
 import tempfile
 import ffmpeg
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import Application, CommandHandler, InlineQueryHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, InlineQueryHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from flask import Flask, Response, request
 import json
 from datetime import datetime
@@ -62,10 +62,7 @@ def add_log(message):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     add_log(f"User {update.effective_user.id} started the bot")
-    await update.message.reply_text(
-        "Привет! Я бот для обработки голосовых сообщений.\n"
-        "Ответьте на голосовое сообщение и вызовите меня через @имя_бота"
-    )
+    await update.message.reply_text("Привет! Я бот, который отвечает на голосовые сообщения.")
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
@@ -166,6 +163,7 @@ async def process_voice(voice_file, effect_id):
             stream = ffmpeg.filter(stream, 'asetrate', 44100*1.2)
             stream = ffmpeg.filter(stream, 'atempo', 1/1.2)
             stream = ffmpeg.filter(stream, 'vibrato', f=5, d=0.8)
+            stream = ffmpeg.filter(stream, 'aecho', 0.6, 0.3, 500, 0.2)
         
         # Сохраняем результат
         stream = ffmpeg.output(stream, output_file.name)
@@ -174,46 +172,86 @@ async def process_voice(voice_file, effect_id):
         return output_file.name
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик callback-запросов"""
+    """Обработчик нажатий на кнопки"""
+    add_log(f"Callback from user {update.effective_user.id}")
     query = update.callback_query
     await query.answer()
     
     try:
-        # Получаем ID сообщения и эффект
+        # Получаем данные из callback
         message_id, effect_id = query.data.split(':')
-        message_id = int(message_id)
         
         # Получаем сообщение
-        message = await context.bot.get_message(chat_id=query.message.chat_id, message_id=message_id)
+        message = await context.bot.get_message(
+            chat_id=update.effective_chat.id,
+            message_id=int(message_id)
+        )
         
         if not message.voice:
-            await query.message.reply_text("Пожалуйста, ответьте на голосовое сообщение")
+            await query.message.reply_text("Это не голосовое сообщение!")
             return
         
+        # Отправляем сообщение о начале обработки
+        processing_msg = await query.message.reply_text(
+            f"Обработка голосового сообщения с эффектом: {EFFECTS[effect_id]}..."
+        )
+        
         # Обрабатываем голосовое сообщение
-        await query.message.reply_text(f"Обрабатываю голосовое сообщение с эффектом: {EFFECTS[effect_id]}")
-        output_file = await process_voice(message.voice, effect_id)
+        voice_file = await context.bot.get_file(message.voice.file_id)
+        processed_file = await process_voice(voice_file, effect_id)
         
-        # Отправляем обработанное сообщение
-        with open(output_file, 'rb') as f:
-            await query.message.reply_voice(voice=f)
+        # Отправляем результат
+        with open(processed_file, 'rb') as audio:
+            await context.bot.send_voice(
+                chat_id=update.effective_chat.id,
+                voice=audio,
+                reply_to_message_id=message.message_id,
+                caption=f"Обработано с эффектом: {EFFECTS[effect_id]}"
+            )
         
-        # Удаляем временные файлы
-        os.unlink(output_file)
+        # Очищаем временные файлы
+        os.unlink(processed_file)
+        await processing_msg.delete()
         
     except Exception as e:
         add_log(f"Error in callback: {str(e)}")
         await query.message.reply_text("Произошла ошибка при обработке голосового сообщения")
 
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ошибок"""
+    add_log(f"Update {update} caused error {context.error}")
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
+        )
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик голосовых сообщений"""
+    await update.message.reply_text("Привет!")
+
 def main():
-    """Основная функция"""
+    """Запуск бота"""
+    # Тестовый лог
+    logger.info("=== Тестовый лог ===")
+    logger.info("1. Проверка токена: %s", "OK" if TOKEN else "FAIL")
+    logger.info("2. Проверка эффектов: %s", list(EFFECTS.keys()))
+    logger.info("3. Время запуска: %s", datetime.now().isoformat())
+    logger.info("4. Новая версия бота: 1.0.0")
+    logger.info("===================")
+    
     # Создаем приложение
     application = Application.builder().token(TOKEN).build()
     
-    # Добавляем обработчики
+    # Регистрируем обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CallbackQueryHandler(handle_callback))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    application.add_error_handler(error_handler)
+    
+    # Запускаем Flask в отдельном потоке
+    from threading import Thread
+    Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.getenv('PORT', 10000)))).start()
     
     # Запускаем бота
     application.run_polling(allowed_updates=Update.ALL_TYPES)

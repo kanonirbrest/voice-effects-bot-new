@@ -4,7 +4,9 @@ import tempfile
 import ffmpeg
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, InlineQueryHandler, CallbackQueryHandler, ContextTypes
-from flask import Flask, Response
+from flask import Flask, Response, request
+import json
+from datetime import datetime
 
 # Настройка логирования
 logging.basicConfig(
@@ -28,15 +30,34 @@ EFFECTS = {
     'autotune': 'Автотюн'
 }
 
-# Создаем Flask приложение для healthcheck
+# Создаем Flask приложение для healthcheck и логов
 app = Flask(__name__)
+
+# Хранилище логов
+logs = []
 
 @app.route('/health')
 def health_check():
     return Response("OK", status=200)
 
+@app.route('/logs')
+def get_logs():
+    return Response(json.dumps(logs), mimetype='application/json')
+
+def add_log(message):
+    log_entry = {
+        'timestamp': datetime.now().isoformat(),
+        'message': message
+    }
+    logs.append(log_entry)
+    # Держим только последние 100 записей
+    if len(logs) > 100:
+        logs.pop(0)
+    logger.info(message)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
+    add_log(f"User {update.effective_user.id} started the bot")
     await update.message.reply_text(
         "Привет! Я бот для обработки голосовых сообщений.\n"
         "Ответьте на голосовое сообщение и вызовите меня через @имя_бота"
@@ -44,6 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
+    add_log(f"Inline query from user {update.inline_query.from_user.id}")
     try:
         # Проверяем, есть ли сообщение, на которое отвечаем
         if not update.inline_query.reply_to_message:
@@ -94,7 +116,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.inline_query.answer(results)
 
     except Exception as e:
-        logger.error(f"Error in inline query: {e}")
+        add_log(f"Error in inline query: {str(e)}")
         await update.inline_query.answer([
             InlineQueryResultArticle(
                 id='error',
@@ -146,6 +168,7 @@ async def process_voice(voice_file, effect_id):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на кнопки"""
+    add_log(f"Callback from user {update.effective_user.id}")
     query = update.callback_query
     await query.answer()
     
@@ -186,12 +209,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await processing_msg.delete()
         
     except Exception as e:
-        logger.error(f"Error in callback: {e}")
+        add_log(f"Error in callback: {str(e)}")
         await query.message.reply_text("Произошла ошибка при обработке голосового сообщения")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
-    logger.error(f"Update {update} caused error {context.error}")
+    add_log(f"Update {update} caused error {context.error}")
     if update and update.effective_message:
         await update.effective_message.reply_text(
             "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
@@ -199,6 +222,13 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Запуск бота"""
+    # Тестовый лог
+    logger.info("=== Тестовый лог ===")
+    logger.info("1. Проверка токена: %s", "OK" if TOKEN else "FAIL")
+    logger.info("2. Проверка эффектов: %s", list(EFFECTS.keys()))
+    logger.info("3. Время запуска: %s", datetime.now().isoformat())
+    logger.info("===================")
+    
     # Создаем приложение
     application = Application.builder().token(TOKEN).build()
     

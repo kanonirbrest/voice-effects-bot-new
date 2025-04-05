@@ -1,11 +1,10 @@
 [build]
 builder = "nixpacks"
 buildCommand = "pip install -r requirements.txt"
-buildpacks = ["https://github.com/heroku/heroku-buildpack-ffmpeg.git"]
 
 [deploy]
-startCommand = "python3 bot.py"
+startCommand = "python bot.py"
 healthcheckPath = "/health"
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 20
-healthcheckTimeout = 30 
+healthcheckTimeout = 100
+restartPolicyType = "never"
+maxInstances = 1 

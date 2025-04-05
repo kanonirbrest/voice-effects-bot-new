@@ -5,7 +5,7 @@ buildpacks = ["https://github.com/heroku/heroku-buildpack-ffmpeg.git"]
 
 [deploy]
 startCommand = "python bot.py"
-healthcheckPath = "/"
-healthcheckTimeout = 100
+healthcheckPath = ""
+healthcheckTimeout = 0
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10 

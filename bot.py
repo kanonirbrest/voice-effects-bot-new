@@ -4,6 +4,7 @@ import tempfile
 import ffmpeg
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, InlineQueryHandler
+import telegram
 
 # Настройка логирования
 logging.basicConfig(
@@ -212,8 +213,32 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
-    # Запуск бота
-    application.run_polling()
+    # Запуск бота с очисткой очереди обновлений
+    application.bot.delete_webhook()
+    application.bot.get_updates(offset=-1)
+    
+    # Добавляем обработчик ошибок
+    application.add_error_handler(error_handler)
+    
+    # Запускаем бота с обработкой всех типов обновлений
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ошибок"""
+    logger.error(f"Update {update} caused error {context.error}")
+    
+    if isinstance(context.error, telegram.error.Conflict):
+        logger.warning("Bot instance conflict detected. Restarting...")
+        # Перезапускаем бота
+        await application.stop()
+        await application.initialize()
+        await application.start()
+        await application.run_polling(allowed_updates=Update.ALL_TYPES)
+    else:
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
+            )
 
 if __name__ == '__main__':
     main() 

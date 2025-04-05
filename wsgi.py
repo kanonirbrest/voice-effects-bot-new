@@ -2,7 +2,7 @@ import sys
 import os
 
 # Добавляем путь к проекту
-path = '/home/kanonirbrest/voice-effects-bot'
+path = '/home/ysakovich/mysite'
 if path not in sys.path:
     sys.path.append(path)
 

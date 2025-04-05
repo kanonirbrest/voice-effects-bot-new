@@ -66,10 +66,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
     add_log(f"Inline query from user {update.inline_query.from_user.id}")
+    add_log(f"Query: {update.inline_query.query}")
+    add_log(f"Chat type: {update.inline_query.chat_type}")
+    
     try:
-        # Проверяем, есть ли сообщение, на которое отвечаем
+        # Проверяем наличие reply_to_message
         if not update.inline_query.reply_to_message:
-            add_log("No reply message found")
+            add_log("No reply_to_message found")
             await update.inline_query.answer([
                 InlineQueryResultArticle(
                     id='help',
@@ -83,7 +86,8 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
             return
 
-        # Проверяем, является ли сообщение голосовым
+        # Проверяем тип сообщения
+        add_log(f"Reply message type: {update.inline_query.reply_to_message.content_type}")
         if not update.inline_query.reply_to_message.voice:
             add_log("Reply message is not a voice message")
             await update.inline_query.answer([
@@ -97,8 +101,6 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
             return
 
-        add_log(f"Processing voice message with ID: {update.inline_query.reply_to_message.message_id}")
-        
         # Создаем список эффектов
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -117,11 +119,14 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]])
                 )
             )
+        
         await update.inline_query.answer(results)
-        add_log(f"Successfully sent {len(results)} effects to user")
+        add_log(f"Successfully sent {len(results)} effects")
 
     except Exception as e:
         add_log(f"Error in inline query: {str(e)}")
+        add_log(f"Error type: {type(e).__name__}")
+        add_log(f"Error details: {str(e)}")
         await update.inline_query.answer([
             InlineQueryResultArticle(
                 id='error',

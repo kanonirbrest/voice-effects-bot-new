@@ -41,32 +41,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик инлайн-запросов"""
-    # Проверяем, есть ли сообщение, на которое отвечают
-    if not update.inline_query.message_id:
-        # Если нет ответа на сообщение, показываем инструкцию
-        results = [
-            InlineQueryResultArticle(
-                id='help',
-                title='Как использовать бота',
-                input_message_content=InputTextMessageContent(
-                    "1. Ответьте на голосовое сообщение\n"
-                    "2. Вызовите бота через @имя_бота\n"
-                    "3. Выберите эффект из списка"
-                )
-            )
-        ]
-        await update.inline_query.answer(results)
-        return
-
+    logger.info(f"Inline query from user {update.inline_query.from_user.id}")
     try:
-        # Получаем сообщение, на которое отвечают
-        message = await context.bot.get_message(
-            chat_id=update.inline_query.chat_id,
-            message_id=update.inline_query.message_id
-        )
+        # Получаем информацию о сообщении, на которое отвечаем
+        reply_to_message = update.inline_query.reply_to_message
+        
+        if not reply_to_message:
+            logger.info("No reply message found")
+            # Если нет ответа на сообщение, показываем инструкцию
+            results = [
+                InlineQueryResultArticle(
+                    id='help',
+                    title='Как использовать бота',
+                    input_message_content=InputTextMessageContent(
+                        "1. Ответьте на голосовое сообщение\n"
+                        "2. Вызовите бота через @имя_бота\n"
+                        "3. Выберите эффект из списка"
+                    )
+                )
+            ]
+            await update.inline_query.answer(results)
+            return
         
         # Проверяем, является ли сообщение голосовым
-        if not message.voice:
+        if not reply_to_message.voice:
+            logger.info("Reply message is not a voice message")
             results = [
                 InlineQueryResultArticle(
                     id='error',
@@ -79,6 +78,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.inline_query.answer(results)
             return
         
+        logger.info(f"Voice message found, showing effects for message {reply_to_message.message_id}")
         # Создаем результаты с эффектами
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -92,7 +92,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton(
                             "Обработать",
-                            callback_data=f"{message.message_id}:{effect_id}"
+                            callback_data=f"{reply_to_message.message_id}:{effect_id}"
                         )
                     ]])
                 )
@@ -100,7 +100,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.inline_query.answer(results)
         
     except Exception as e:
-        logger.error(f"Error in inline query: {e}")
+        logger.error(f"Error in inline query: {e}", exc_info=True)
         results = [
             InlineQueryResultArticle(
                 id='error',
@@ -166,8 +166,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"Callback query from user {query.from_user.id}")
+    
     # Разбираем callback_data
     message_id, effect_id = query.data.split(':')
+    logger.info(f"Processing voice message {message_id} with effect {effect_id}")
     
     try:
         # Получаем сообщение по ID
@@ -177,6 +180,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         if not message.voice:
+            logger.warning(f"Message {message_id} is not a voice message")
             await query.message.reply_text("Это не голосовое сообщение!")
             return
         
@@ -187,9 +191,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Получаем файл голосового сообщения
         voice_file = await context.bot.get_file(message.voice.file_id)
+        logger.info(f"Downloading voice file {voice_file.file_id}")
         
         # Обрабатываем голосовое сообщение
         processed_file = await process_voice(voice_file, effect_id)
+        logger.info(f"Voice file processed and saved to {processed_file}")
         
         # Отправляем обработанное сообщение
         with open(processed_file, 'rb') as audio:
@@ -199,20 +205,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_to_message_id=message.message_id,
                 caption=f"Обработано с эффектом: {EFFECTS[effect_id]}"
             )
+        logger.info(f"Processed voice message sent to chat {update.effective_chat.id}")
         
         # Удаляем временные файлы
         os.unlink(processed_file)
+        logger.info("Temporary files cleaned up")
         
         # Удаляем сообщение о обработке
         await processing_msg.delete()
         
     except Exception as e:
-        logger.error(f"Error processing voice message: {e}")
+        logger.error(f"Error processing voice message: {e}", exc_info=True)
         await query.message.reply_text("Произошла ошибка при обработке голосового сообщения")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
-    logger.error(f"Update {update} caused error {context.error}")
+    logger.error(f"Update {update} caused error {context.error}", exc_info=True)
     if update and update.effective_message:
         await update.effective_message.reply_text(
             "Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже."
@@ -221,6 +229,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     """Запуск бота с обработкой ошибок"""
     try:
+        logger.info("Initializing bot...")
         # Создаем приложение
         application = Application.builder().token(TOKEN).build()
         
@@ -236,6 +245,7 @@ async def main():
         logger.info("Starting bot...")
         await application.initialize()
         await application.start()
+        logger.info("Bot started successfully")
         await application.run_polling(
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True,  # Игнорируем накопившиеся обновления
@@ -243,13 +253,15 @@ async def main():
         )
         
     except Exception as e:
-        logger.error(f"Error in main: {e}")
+        logger.error(f"Error in main: {e}", exc_info=True)
         raise
     finally:
         # Корректное завершение работы
         if application.running:
+            logger.info("Stopping bot...")
             await application.stop()
             await application.shutdown()
+            logger.info("Bot stopped successfully")
 
 if __name__ == '__main__':
     try:

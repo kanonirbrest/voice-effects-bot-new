@@ -45,8 +45,11 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем, является ли чат личным
     is_private = update.inline_query.chat_type == 'private'
     
+    # Проверяем, есть ли сообщение, на которое отвечают
+    has_reply = bool(update.inline_query.message_id)
+    
     # Если это личный чат или ответ на сообщение, показываем эффекты
-    if is_private or update.inline_query.from_user.id == update.inline_query.chat.id:
+    if is_private or has_reply:
         # Создаем результаты с эффектами
         results = []
         for effect_id, effect_name in EFFECTS.items():
@@ -76,7 +79,8 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 title='Как использовать бота',
                 input_message_content=InputTextMessageContent(
                     "1. Ответьте на голосовое сообщение\n"
-                    "2. Выберите эффект из списка"
+                    "2. Выберите эффект из списка\n\n"
+                    "В личных сообщениях вы можете просто отправить голосовое сообщение боту"
                 )
             )
         ]

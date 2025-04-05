@@ -3,15 +3,24 @@ import logging
 import tempfile
 import ffmpeg
 import asyncio
+import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, InlineQueryHandler
 
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Проверка системного времени
+current_time = datetime.datetime.now()
+if current_time.year > 2024:
+    logger.warning(f"System time seems incorrect: {current_time}")
+    # Используем относительное время в логах
+    logging.Formatter.converter = lambda *args: datetime.datetime.now().timetuple()
 
 # Получение токена из переменных окружения
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -20,6 +29,7 @@ if not TOKEN:
     raise ValueError("TELEGRAM_TOKEN not found in environment variables")
 
 logger.info("Token loaded successfully")
+logger.info(f"Current system time: {current_time}")
 
 # Эффекты для голосовых сообщений
 EFFECTS = {

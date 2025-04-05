@@ -237,7 +237,7 @@ def main():
     logger.info("1. Проверка токена: %s", "OK" if TOKEN else "FAIL")
     logger.info("2. Проверка эффектов: %s", list(EFFECTS.keys()))
     logger.info("3. Время запуска: %s", datetime.now().isoformat())
-    logger.info("4. Новая версия бота: 1.0.1")
+    logger.info("4. Новая версия бота: 1.0.2")
     logger.info("===================")
     
     # Создаем приложение с увеличенным таймаутом
@@ -261,21 +261,18 @@ def main():
     Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3000)))).start()
     
     # Запускаем бота с обработкой ошибок
-    while True:
-        try:
-            application.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True,
-                close_loop=False
-            )
-        except Exception as e:
-            logger.error(f"Error in polling: {str(e)}")
-            if "Timed out" in str(e) or "Conflict" in str(e):
-                logger.info("Connection error detected, waiting 10 seconds before retry...")
-                import time
-                time.sleep(10)
-            else:
-                raise e
+    try:
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,
+            close_loop=False
+        )
+    except Exception as e:
+        logger.error(f"Error in polling: {str(e)}")
+        if "Conflict" in str(e):
+            logger.info("Bot instance conflict detected. Stopping current instance...")
+            return
+        raise e
 
 if __name__ == '__main__':
     main() 

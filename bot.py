@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Загрузка переменных окружения
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
+logger.info(f"Loaded token: {TOKEN[:10]}...")  # Логируем первые 10 символов токена
 
 # Эффекты для голосовых сообщений
 EFFECTS = {

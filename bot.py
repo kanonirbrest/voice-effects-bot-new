@@ -210,10 +210,16 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CallbackQueryHandler(handle_callback))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))  # Добавляем обработчик голосовых сообщений
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
-    # Запуск бота
-    application.run_polling()
+    # Очищаем webhook и обновления
+    async with application:
+        await application.bot.delete_webhook()
+        await application.bot.get_updates(offset=-1)  # Очищаем очередь обновлений
+        
+        # Запуск бота
+        await application.run_polling()
 
 if __name__ == '__main__':
-    main() 
+    import asyncio
+    asyncio.run(main()) 

@@ -202,7 +202,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-async def main():
+def main():
     """Запуск бота"""
     application = Application.builder().token(TOKEN).build()
 
@@ -212,13 +212,8 @@ async def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
-    # Очищаем webhook и обновления
-    await application.bot.delete_webhook()
-    await application.bot.get_updates(offset=-1)  # Очищаем очередь обновлений
-    
     # Запуск бота
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main()) 
+    main() 
